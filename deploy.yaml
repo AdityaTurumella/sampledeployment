@@ -1,35 +1,37 @@
-apiVersion: tekton.dev/v1alpha1
-kind: Task
+apiVersion: v1
+kind: Service
 metadata:
-  name: deploy-application
+  name: app
+  labels:
+    app: app
 spec:
-  inputs:
-    params:
-      - name: pathToContext
-        description: The path to the build context, used by Kaniko - within the workspace
-        default: .
-      - name: pathToYamlFile
-        description: The path to the yaml file to deploy within the git source
-        default: deploy.yaml
-      - name: imageUrl
-        description: Url of image repository
-        default: url
-      - name: imageTag
-        description: Tag of the images to be used.
-        default: "latest"
-  steps:
-    - name: update-yaml
-      image: alpine
-      command: ["sed"]
-      args:
-        - "-i"
-        - "-e"
-        - "s;IMAGE;$(inputs.params.imageUrl):$(inputs.params.imageTag);g"
-        - "$(inputs.resources.git-source.path)/$(inputs.params.pathToContext)/$(inputs.params.pathToYamlFile)"
-    - name: deploy-app
-      image: lachlanevenson/k8s-kubectl
-      command: ["kubectl"]
-      args:
-        - "apply"
-        - "-f"
-        - "$(inputs.resources.git-source.path)/$(inputs.params.pathToContext)/$(inputs.params.pathToYamlFile)"
+  type: NodePort
+  ports:
+    - port: 8080
+      name: app
+      nodePort: 32000
+  selector:
+    app: app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  labels:
+    app: app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      containers:
+      - name: app
+        # Because kube-registry-proxy is present localhost access is via http instead of https
+        image: imagename
+        ports:
+        - containerPort: 8080
